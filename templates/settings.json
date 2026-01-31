@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "claude-memory": {
+      "command": "npx",
+      "args": ["claude-memory", "serve"],
+      "env": {}
+    }
+  }
+}
