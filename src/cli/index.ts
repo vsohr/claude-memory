@@ -3,6 +3,7 @@ import { initCommand } from './commands/init.js';
 import { indexCommand } from './commands/index-cmd.js';
 import { searchCommand } from './commands/search.js';
 import { serveCommand } from './commands/serve.js';
+import { addCommand } from './commands/add.js';
 
 export function createCLI(): Command {
   const program = new Command();
@@ -74,6 +75,16 @@ export function createCLI(): Command {
     .description('Start the MCP server for Claude Code integration')
     .action(async () => {
       await serveCommand(process.cwd());
+    });
+
+  program
+    .command('add <content>')
+    .description('Add a manual memory entry')
+    .option('-c, --category <category>', 'Category for the entry (architecture, component, domain, pattern, gotcha, discovery, general)', 'general')
+    .action(async (content, options) => {
+      await addCommand(content, process.cwd(), {
+        category: options.category,
+      });
     });
 
   return program;
