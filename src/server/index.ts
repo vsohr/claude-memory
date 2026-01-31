@@ -17,6 +17,10 @@ import {
   handleMemoryList,
   memoryListToolDefinition,
 } from './tools/memory-list';
+import {
+  handleMemoryDelete,
+  memoryDeleteToolDefinition,
+} from './tools/memory-delete';
 import { logger } from '../utils/logger';
 
 export interface ServerConfig {
@@ -44,7 +48,12 @@ export class MemoryServer {
   private setupHandlers(): void {
     // List tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: [memorySearchToolDefinition, memoryAddToolDefinition, memoryListToolDefinition],
+      tools: [
+        memorySearchToolDefinition,
+        memoryAddToolDefinition,
+        memoryListToolDefinition,
+        memoryDeleteToolDefinition,
+      ],
     }));
 
     // Call tool
@@ -81,6 +90,16 @@ export class MemoryServer {
             return {
               content: [{ type: 'text', text: JSON.stringify(result) }],
               isError: false,
+            };
+          }
+          case 'memory_delete': {
+            const result = await handleMemoryDelete(
+              args as { id: string },
+              this.repository
+            );
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result) }],
+              isError: !result.deleted,
             };
           }
           default:
@@ -143,6 +162,8 @@ export class MemoryServer {
           args as { category?: string; limit?: number },
           this.repository
         );
+      case 'memory_delete':
+        return handleMemoryDelete(args as { id: string }, this.repository);
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
