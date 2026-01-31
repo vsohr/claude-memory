@@ -27,15 +27,21 @@ export class MetaService {
 
   /**
    * Load metadata from disk. Returns cached meta if already loaded.
-   * Creates default metadata if file doesn't exist.
+   * Creates default metadata if file doesn't exist or is corrupted.
    */
   async load(): Promise<IndexerMeta> {
     if (this.meta) return this.meta;
 
     try {
       const content = await readFile(this.metaPath, 'utf-8');
-      this.meta = JSON.parse(content) as IndexerMeta;
-      return this.meta;
+      try {
+        this.meta = JSON.parse(content) as IndexerMeta;
+        return this.meta;
+      } catch (parseError) {
+        logger.warn(`Meta file corrupted, resetting to defaults: ${(parseError as Error).message}`);
+        this.meta = { ...DEFAULT_META, fileHashes: {}, discovery: { ...DEFAULT_META.discovery } };
+        return this.meta;
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         logger.debug('Meta file not found, using defaults');
