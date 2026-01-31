@@ -9,6 +9,10 @@ import {
   handleMemorySearch,
   memorySearchToolDefinition,
 } from './tools/memory-search';
+import {
+  handleMemoryAdd,
+  memoryAddToolDefinition,
+} from './tools/memory-add';
 import { logger } from '../utils/logger';
 
 export interface ServerConfig {
@@ -36,7 +40,7 @@ export class MemoryServer {
   private setupHandlers(): void {
     // List tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: [memorySearchToolDefinition],
+      tools: [memorySearchToolDefinition, memoryAddToolDefinition],
     }));
 
     // Call tool
@@ -53,6 +57,16 @@ export class MemoryServer {
             return {
               content: [{ type: 'text', text: JSON.stringify(result) }],
               isError: !!result.error,
+            };
+          }
+          case 'memory_add': {
+            const result = await handleMemoryAdd(
+              args as { content: string; category?: string; keywords?: string[] },
+              this.repository
+            );
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result) }],
+              isError: !result.success,
             };
           }
           default:
@@ -103,6 +117,11 @@ export class MemoryServer {
       case 'memory_search':
         return handleMemorySearch(
           args as { query: string; limit?: number },
+          this.repository
+        );
+      case 'memory_add':
+        return handleMemoryAdd(
+          args as { content: string; category?: string; keywords?: string[] },
           this.repository
         );
       default:
