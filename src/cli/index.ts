@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { initCommand } from './commands/init.js';
 import { indexCommand } from './commands/index-cmd.js';
+import { searchCommand } from './commands/search.js';
 
 export function createCLI(): Command {
   const program = new Command();
@@ -52,6 +53,18 @@ export function createCLI(): Command {
       await indexCommand(process.cwd(), {
         force: options.force,
         dryRun: options.dryRun,
+      });
+    });
+
+  program
+    .command('search <query>')
+    .description('Search the memory database')
+    .option('-l, --limit <number>', 'Number of results to return', '5')
+    .option('--json', 'Output results as JSON')
+    .action(async (query, options) => {
+      await searchCommand(query, process.cwd(), {
+        limit: parseInt(options.limit, 10),
+        json: options.json,
       });
     });
 
