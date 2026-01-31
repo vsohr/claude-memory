@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { initCommand } from './commands/init.js';
+import { indexCommand } from './commands/index-cmd.js';
 
 export function createCLI(): Command {
   const program = new Command();
@@ -40,6 +41,18 @@ export function createCLI(): Command {
       console.log('  1. Add knowledge to .claude/knowledge/');
       console.log('  2. Run: npx claude-memory index');
       console.log('  3. Use memory_search in Claude Code');
+    });
+
+  program
+    .command('index')
+    .description('Index markdown files to vector database')
+    .option('-f, --force', 'Reindex all files (ignore cache)')
+    .option('--dry-run', 'Show what would be indexed without indexing')
+    .action(async (options) => {
+      await indexCommand(process.cwd(), {
+        force: options.force,
+        dryRun: options.dryRun,
+      });
     });
 
   return program;
