@@ -79,6 +79,13 @@ export class Indexer {
       const file = files[i];
       const relativePath = relative(this.knowledgeDir, file);
 
+      // Security: reject paths with directory traversal
+      if (relativePath.includes('..')) {
+        logger.warn(`Skipping path with traversal: ${relativePath}`);
+        result.filesSkipped++;
+        continue;
+      }
+
       options.onProgress?.({
         current: i + 1,
         total: files.length,

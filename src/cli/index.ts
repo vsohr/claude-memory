@@ -64,8 +64,9 @@ export function createCLI(): Command {
     .option('-l, --limit <number>', 'Number of results to return', '5')
     .option('--json', 'Output results as JSON')
     .action(async (query, options) => {
+      const limit = parseInt(options.limit, 10);
       await searchCommand(query, process.cwd(), {
-        limit: parseInt(options.limit, 10),
+        limit: Number.isNaN(limit) ? 5 : limit,
         json: options.json,
       });
     });
