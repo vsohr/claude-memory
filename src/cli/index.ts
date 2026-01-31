@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { initCommand } from './commands/init.js';
 import { indexCommand } from './commands/index-cmd.js';
 import { searchCommand } from './commands/search.js';
+import { serveCommand } from './commands/serve.js';
 
 export function createCLI(): Command {
   const program = new Command();
@@ -66,6 +67,13 @@ export function createCLI(): Command {
         limit: parseInt(options.limit, 10),
         json: options.json,
       });
+    });
+
+  program
+    .command('serve')
+    .description('Start the MCP server for Claude Code integration')
+    .action(async () => {
+      await serveCommand(process.cwd());
     });
 
   return program;
