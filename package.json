@@ -24,7 +24,13 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
-  "keywords": ["claude", "memory", "mcp", "knowledge", "semantic-search"],
+  "keywords": [
+    "claude",
+    "memory",
+    "mcp",
+    "knowledge",
+    "semantic-search"
+  ],
   "author": "",
   "license": "MIT",
   "engines": {
@@ -33,5 +39,15 @@
   "files": [
     "dist",
     "templates"
-  ]
+  ],
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^9.39.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
 }
