@@ -52,6 +52,8 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
-    "@lancedb/lancedb": "^0.23.0"
+    "@lancedb/lancedb": "^0.23.0",
+    "gray-matter": "^4.0.3",
+    "marked": "^17.0.1"
   }
 }
