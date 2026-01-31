@@ -1,0 +1,249 @@
+import * as lancedb from '@lancedb/lancedb';
+import type { Connection, Table } from '@lancedb/lancedb';
+import { getEmbeddingService } from './embeddings';
+import { generateId } from '../utils/id';
+import { StorageError } from '../utils/errors';
+import { logger } from '../utils/logger';
+import type {
+  MemoryEntry,
+  MemoryEntryInput,
+  MemorySearchResult,
+  MemoryCategory,
+  MemoryMetadata,
+} from '../types/memory';
+
+const TABLE_NAME = 'memories';
+
+interface MemoryRow {
+  id: string;
+  content: string;
+  category: string;
+  source: string;
+  filePath: string;
+  sectionTitle: string;
+  keywords: string;
+  referenceCount: number;
+  promoted: boolean;
+  promotedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  vector: number[];
+  [key: string]: unknown;
+}
+
+export class MemoryRepository {
+  private dbPath: string;
+  private connection: Connection | null = null;
+  private table: Table | null = null;
+
+  constructor(dbPath: string) {
+    this.dbPath = dbPath;
+  }
+
+  async connect(): Promise<void> {
+    try {
+      this.connection = await lancedb.connect(this.dbPath);
+
+      const tableNames = await this.connection.tableNames();
+      if (tableNames.includes(TABLE_NAME)) {
+        this.table = await this.connection.openTable(TABLE_NAME);
+      }
+
+      logger.debug(`Connected to LanceDB at ${this.dbPath}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      throw new StorageError(`Failed to connect to database: ${message}`, 'CONNECTION', {
+        path: this.dbPath,
+      });
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    this.connection = null;
+    this.table = null;
+  }
+
+  isConnected(): boolean {
+    return this.connection !== null;
+  }
+
+  private async ensureTable(): Promise<Table> {
+    if (this.table) return this.table;
+    if (!this.connection) {
+      throw new StorageError('Database not connected', 'NOT_CONNECTED');
+    }
+
+    // Create table with a dummy row (LanceDB requires data to infer schema)
+    const embeddingService = getEmbeddingService();
+    const dummyVector = await embeddingService.embed('initialization');
+
+    const initialRow: MemoryRow = {
+      id: '__init__',
+      content: '',
+      category: 'general',
+      source: 'manual',
+      filePath: '',
+      sectionTitle: '',
+      keywords: '[]',
+      referenceCount: 0,
+      promoted: false,
+      promotedAt: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      vector: dummyVector,
+    };
+
+    this.table = await this.connection.createTable(TABLE_NAME, [initialRow]);
+
+    // Delete the initialization row
+    await this.table.delete('id = "__init__"');
+
+    return this.table;
+  }
+
+  private rowToEntry(row: MemoryRow): MemoryEntry {
+    return {
+      id: row.id,
+      content: row.content,
+      metadata: {
+        category: row.category as MemoryCategory,
+        source: row.source as MemoryMetadata['source'],
+        filePath: row.filePath || undefined,
+        sectionTitle: row.sectionTitle || undefined,
+        keywords: JSON.parse(row.keywords) as string[],
+        referenceCount: row.referenceCount,
+        promoted: row.promoted,
+        promotedAt: row.promotedAt || undefined,
+      },
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  private async entryToRow(input: MemoryEntryInput, existingId?: string): Promise<MemoryRow> {
+    const embeddingService = getEmbeddingService();
+    const vector = await embeddingService.embed(input.content);
+    const now = new Date().toISOString();
+
+    return {
+      id: existingId ?? generateId(),
+      content: input.content,
+      category: input.metadata?.category ?? 'general',
+      source: input.metadata?.source ?? 'manual',
+      filePath: input.metadata?.filePath ?? '',
+      sectionTitle: input.metadata?.sectionTitle ?? '',
+      keywords: JSON.stringify(input.metadata?.keywords ?? []),
+      referenceCount: input.metadata?.referenceCount ?? 0,
+      promoted: input.metadata?.promoted ?? false,
+      promotedAt: input.metadata?.promotedAt ?? '',
+      createdAt: now,
+      updatedAt: now,
+      vector,
+    };
+  }
+
+  async add(input: MemoryEntryInput): Promise<MemoryEntry> {
+    const table = await this.ensureTable();
+    const row = await this.entryToRow(input);
+    await table.add([row]);
+    return this.rowToEntry(row);
+  }
+
+  async get(id: string): Promise<MemoryEntry | null> {
+    const table = await this.ensureTable();
+    const results = await table.query().where(`id = "${id}"`).limit(1).toArray();
+
+    if (results.length === 0) return null;
+    return this.rowToEntry(results[0] as unknown as MemoryRow);
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const table = await this.ensureTable();
+    const existing = await this.get(id);
+    if (!existing) return false;
+
+    await table.delete(`id = "${id}"`);
+    return true;
+  }
+
+  async search(query: string, limit = 5): Promise<MemorySearchResult[]> {
+    const table = await this.ensureTable();
+    const embeddingService = getEmbeddingService();
+    const queryVector = await embeddingService.embed(query);
+
+    const results = await table
+      .vectorSearch(queryVector)
+      .limit(limit)
+      .toArray();
+
+    return results.map((row) => ({
+      entry: this.rowToEntry(row as unknown as MemoryRow),
+      score: 1 - (row._distance ?? 0), // Convert distance to similarity
+    }));
+  }
+
+  async list(category?: MemoryCategory, limit = 50): Promise<MemoryEntry[]> {
+    const table = await this.ensureTable();
+    let query = table.query();
+
+    if (category) {
+      query = query.where(`category = "${category}"`);
+    }
+
+    const results = await query.limit(limit).toArray();
+    return results.map((row) => this.rowToEntry(row as unknown as MemoryRow));
+  }
+
+  async count(category?: MemoryCategory): Promise<number> {
+    const table = await this.ensureTable();
+    let query = table.query();
+
+    if (category) {
+      query = query.where(`category = "${category}"`);
+    }
+
+    const results = await query.toArray();
+    return results.length;
+  }
+
+  async incrementReferenceCount(id: string): Promise<void> {
+    const entry = await this.get(id);
+    if (!entry) return;
+
+    // LanceDB doesn't support UPDATE, so we delete and re-add
+    const table = await this.ensureTable();
+    await table.delete(`id = "${id}"`);
+
+    const updatedInput: MemoryEntryInput = {
+      content: entry.content,
+      metadata: {
+        ...entry.metadata,
+        referenceCount: entry.metadata.referenceCount + 1,
+      },
+    };
+
+    const row = await this.entryToRow(updatedInput, id);
+    row.createdAt = entry.createdAt; // Preserve original creation time
+    await table.add([row]);
+  }
+
+  async deleteByFile(filePath: string): Promise<number> {
+    const table = await this.ensureTable();
+    const existing = await table.query().where(`filePath = "${filePath}"`).toArray();
+
+    if (existing.length > 0) {
+      await table.delete(`filePath = "${filePath}"`);
+    }
+
+    return existing.length;
+  }
+
+  async addBatch(entries: MemoryEntryInput[]): Promise<MemoryEntry[]> {
+    const results: MemoryEntry[] = [];
+    for (const entry of entries) {
+      const added = await this.add(entry);
+      results.push(added);
+    }
+    return results;
+  }
+}
