@@ -17,11 +17,15 @@ export function createCLI(): Command {
     .command('init')
     .description('Initialize claude-memory in the current repository')
     .option('-f, --force', 'Overwrite existing files')
+    .option('--skip-index', 'Skip initial indexing')
     .action(async (options) => {
       const cwd = process.cwd();
       console.log('Initializing claude-memory...\n');
 
-      const result = await initCommand(cwd, { force: options.force });
+      const result = await initCommand(cwd, {
+        force: options.force,
+        skipIndex: options.skipIndex,
+      });
 
       if (result.created.length > 0) {
         console.log('Created:');
@@ -39,11 +43,11 @@ export function createCLI(): Command {
         process.exit(1);
       }
 
-      console.log('\nInitialization complete!');
-      console.log('Next steps:');
-      console.log('  1. Add knowledge to .claude/knowledge/');
-      console.log('  2. Run: npx claude-memory index');
-      console.log('  3. Use memory_search in Claude Code');
+      if (result.indexed) {
+        console.log('\nIndexed knowledge files.');
+      }
+
+      console.log('\nReady! Add knowledge to .claude/knowledge/ and commit.');
     });
 
   program
