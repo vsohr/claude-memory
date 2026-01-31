@@ -32,11 +32,11 @@ const VALID_CATEGORIES: readonly string[] = [
 
 /**
  * Escapes special characters in a string for safe use in LanceDB query expressions.
- * Handles double quotes, backslashes, and other SQL-like injection vectors.
+ * Uses single quotes for string values (SQL standard) and escapes single quotes by doubling them.
  */
 function escapeQueryValue(value: string): string {
-  // Escape backslashes first, then double quotes
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  // Escape backslashes first, then single quotes (doubled for SQL escaping)
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "''");
 }
 
 /**
@@ -108,26 +108,32 @@ function validateFilePath(filePath: string): string {
 
 /**
  * Builds a safe WHERE clause for ID queries.
+ * Uses single quotes for string values (SQL standard).
+ * Column 'id' is lowercase so no quoting needed.
  */
 function buildIdFilter(id: string): string {
   const validatedId = validateId(id);
-  return `id = "${escapeQueryValue(validatedId)}"`;
+  return `id = '${escapeQueryValue(validatedId)}'`;
 }
 
 /**
  * Builds a safe WHERE clause for category queries.
+ * Uses single quotes for string values (SQL standard).
+ * Column 'category' is lowercase so no quoting needed.
  */
 function buildCategoryFilter(category: MemoryCategory): string {
   const validatedCategory = validateCategory(category);
-  return `category = "${escapeQueryValue(validatedCategory)}"`;
+  return `category = '${escapeQueryValue(validatedCategory)}'`;
 }
 
 /**
  * Builds a safe WHERE clause for file path queries.
+ * Uses double-quoted column name for case-sensitivity (camelCase column).
+ * Uses single quotes for string values (SQL standard).
  */
 function buildFilePathFilter(filePath: string): string {
   const validatedFilePath = validateFilePath(filePath);
-  return `filePath = "${escapeQueryValue(validatedFilePath)}"`;
+  return `"filePath" = '${escapeQueryValue(validatedFilePath)}'`;
 }
 
 interface MemoryRow {
@@ -212,7 +218,8 @@ export class MemoryRepository {
     this.table = await this.connection.createTable(TABLE_NAME, [initialRow]);
 
     // Delete the initialization row
-    await this.table.delete('id = "__init__"');
+    // LanceDB uses DataFusion SQL which is case-insensitive for unquoted identifiers
+    await this.table.delete("id = '__init__'");
 
     return this.table;
   }

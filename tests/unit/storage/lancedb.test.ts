@@ -1,25 +1,32 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { MemoryRepository } from '../../../src/storage/lancedb';
 
 describe('MemoryRepository', () => {
+  let baseDir: string;
   let tempDir: string;
   let repository: MemoryRepository;
+  let testCount = 0;
 
   beforeAll(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'lance-test-'));
+    baseDir = await mkdtemp(join(tmpdir(), 'lance-test-'));
   });
 
   afterAll(async () => {
-    await repository?.disconnect();
-    await rm(tempDir, { recursive: true });
+    await rm(baseDir, { recursive: true });
   });
 
   beforeEach(async () => {
+    // Create unique directory for each test to avoid stale data issues
+    tempDir = join(baseDir, `test-${++testCount}`);
     repository = new MemoryRepository(tempDir);
     await repository.connect();
+  });
+
+  afterEach(async () => {
+    await repository?.disconnect();
   });
 
   it('connects to database', () => {
