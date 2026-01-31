@@ -2,7 +2,7 @@ import * as lancedb from '@lancedb/lancedb';
 import type { Connection, Table } from '@lancedb/lancedb';
 import { getEmbeddingService } from './embeddings';
 import { generateId } from '../utils/id';
-import { StorageError } from '../utils/errors';
+import { StorageError, ValidationError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import type {
   MemoryEntry,
@@ -13,6 +13,122 @@ import type {
 } from '../types/memory';
 
 const TABLE_NAME = 'memories';
+
+// Input validation constants
+const MAX_ID_LENGTH = 128;
+const MAX_CATEGORY_LENGTH = 64;
+const MAX_FILE_PATH_LENGTH = 1024;
+
+// Valid category values for validation
+const VALID_CATEGORIES: readonly string[] = [
+  'architecture',
+  'component',
+  'domain',
+  'pattern',
+  'gotcha',
+  'discovery',
+  'general',
+] as const;
+
+/**
+ * Escapes special characters in a string for safe use in LanceDB query expressions.
+ * Handles double quotes, backslashes, and other SQL-like injection vectors.
+ */
+function escapeQueryValue(value: string): string {
+  // Escape backslashes first, then double quotes
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
+ * Validates and sanitizes an ID parameter.
+ * @throws ValidationError if ID is invalid
+ */
+function validateId(id: string): string {
+  if (typeof id !== 'string') {
+    throw new ValidationError('ID must be a string', 'id', { code: 'INVALID_TYPE' });
+  }
+  if (id.length === 0) {
+    throw new ValidationError('ID cannot be empty', 'id', { code: 'EMPTY_VALUE' });
+  }
+  if (id.length > MAX_ID_LENGTH) {
+    throw new ValidationError(
+      `ID exceeds maximum length of ${MAX_ID_LENGTH} characters`,
+      'id',
+      { code: 'MAX_LENGTH_EXCEEDED' }
+    );
+  }
+  return id;
+}
+
+/**
+ * Validates a category parameter.
+ * @throws ValidationError if category is invalid
+ */
+function validateCategory(category: string): MemoryCategory {
+  if (typeof category !== 'string') {
+    throw new ValidationError('Category must be a string', 'category', { code: 'INVALID_TYPE' });
+  }
+  if (category.length > MAX_CATEGORY_LENGTH) {
+    throw new ValidationError(
+      `Category exceeds maximum length of ${MAX_CATEGORY_LENGTH} characters`,
+      'category',
+      { code: 'MAX_LENGTH_EXCEEDED' }
+    );
+  }
+  if (!VALID_CATEGORIES.includes(category)) {
+    throw new ValidationError(
+      `Invalid category: ${category}. Must be one of: ${VALID_CATEGORIES.join(', ')}`,
+      'category',
+      { code: 'INVALID_CATEGORY' }
+    );
+  }
+  return category as MemoryCategory;
+}
+
+/**
+ * Validates and sanitizes a file path parameter.
+ * @throws ValidationError if file path is invalid
+ */
+function validateFilePath(filePath: string): string {
+  if (typeof filePath !== 'string') {
+    throw new ValidationError('File path must be a string', 'filePath', { code: 'INVALID_TYPE' });
+  }
+  if (filePath.length === 0) {
+    throw new ValidationError('File path cannot be empty', 'filePath', { code: 'EMPTY_VALUE' });
+  }
+  if (filePath.length > MAX_FILE_PATH_LENGTH) {
+    throw new ValidationError(
+      `File path exceeds maximum length of ${MAX_FILE_PATH_LENGTH} characters`,
+      'filePath',
+      { code: 'MAX_LENGTH_EXCEEDED' }
+    );
+  }
+  return filePath;
+}
+
+/**
+ * Builds a safe WHERE clause for ID queries.
+ */
+function buildIdFilter(id: string): string {
+  const validatedId = validateId(id);
+  return `id = "${escapeQueryValue(validatedId)}"`;
+}
+
+/**
+ * Builds a safe WHERE clause for category queries.
+ */
+function buildCategoryFilter(category: MemoryCategory): string {
+  const validatedCategory = validateCategory(category);
+  return `category = "${escapeQueryValue(validatedCategory)}"`;
+}
+
+/**
+ * Builds a safe WHERE clause for file path queries.
+ */
+function buildFilePathFilter(filePath: string): string {
+  const validatedFilePath = validateFilePath(filePath);
+  return `filePath = "${escapeQueryValue(validatedFilePath)}"`;
+}
 
 interface MemoryRow {
   id: string;
@@ -151,7 +267,7 @@ export class MemoryRepository {
 
   async get(id: string): Promise<MemoryEntry | null> {
     const table = await this.ensureTable();
-    const results = await table.query().where(`id = "${id}"`).limit(1).toArray();
+    const results = await table.query().where(buildIdFilter(id)).limit(1).toArray();
 
     if (results.length === 0) return null;
     return this.rowToEntry(results[0] as unknown as MemoryRow);
@@ -162,7 +278,7 @@ export class MemoryRepository {
     const existing = await this.get(id);
     if (!existing) return false;
 
-    await table.delete(`id = "${id}"`);
+    await table.delete(buildIdFilter(id));
     return true;
   }
 
@@ -187,7 +303,7 @@ export class MemoryRepository {
     let query = table.query();
 
     if (category) {
-      query = query.where(`category = "${category}"`);
+      query = query.where(buildCategoryFilter(category));
     }
 
     const results = await query.limit(limit).toArray();
@@ -199,7 +315,7 @@ export class MemoryRepository {
     let query = table.query();
 
     if (category) {
-      query = query.where(`category = "${category}"`);
+      query = query.where(buildCategoryFilter(category));
     }
 
     const results = await query.toArray();
@@ -212,7 +328,7 @@ export class MemoryRepository {
 
     // LanceDB doesn't support UPDATE, so we delete and re-add
     const table = await this.ensureTable();
-    await table.delete(`id = "${id}"`);
+    await table.delete(buildIdFilter(id));
 
     const updatedInput: MemoryEntryInput = {
       content: entry.content,
@@ -229,10 +345,11 @@ export class MemoryRepository {
 
   async deleteByFile(filePath: string): Promise<number> {
     const table = await this.ensureTable();
-    const existing = await table.query().where(`filePath = "${filePath}"`).toArray();
+    const filter = buildFilePathFilter(filePath);
+    const existing = await table.query().where(filter).toArray();
 
     if (existing.length > 0) {
-      await table.delete(`filePath = "${filePath}"`);
+      await table.delete(filter);
     }
 
     return existing.length;
