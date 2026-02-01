@@ -4,7 +4,7 @@ import { indexCommand } from './commands/index-cmd.js';
 import { searchCommand } from './commands/search.js';
 import { serveCommand } from './commands/serve.js';
 import { addCommand } from './commands/add.js';
-import { scanCommand } from './commands/scan.js';
+import { analyzeCommand } from './commands/analyze.js';
 
 export function createCLI(): Command {
   const program = new Command();
@@ -38,11 +38,11 @@ export function createCLI(): Command {
     });
 
   program
-    .command('scan')
-    .description('Scan repository and save structure to memory')
-    .option('--no-save', 'Show scan results without saving')
+    .command('analyze')
+    .description('Deep analysis: extract docs, code structure, routes, patterns')
+    .option('--no-save', 'Show analysis without saving to memory')
     .action(async (options) => {
-      await scanCommand(process.cwd(), { save: options.save });
+      await analyzeCommand(process.cwd(), { save: options.save });
     });
 
   program

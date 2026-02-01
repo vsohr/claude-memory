@@ -21,10 +21,16 @@ import {
   handleMemoryDelete,
   memoryDeleteToolDefinition,
 } from './tools/memory-delete';
+import {
+  handleMemoryAnalyze,
+  memoryAnalyzeToolDefinition,
+} from './tools/memory-analyze';
 import { logger } from '../utils/logger';
+import { join } from 'path';
 
 export interface ServerConfig {
   vectorsDir: string;
+  projectRoot?: string; // If not provided, derived from vectorsDir
   testMode?: boolean;
 }
 
@@ -32,10 +38,13 @@ export class MemoryServer {
   private server: Server;
   private repository: MemoryRepository;
   private config: ServerConfig;
+  private projectRoot: string;
 
   constructor(config: ServerConfig) {
     this.config = config;
     this.repository = new MemoryRepository(config.vectorsDir);
+    // Derive project root from vectorsDir: .claude/memory/vectors -> project root
+    this.projectRoot = config.projectRoot || join(config.vectorsDir, '..', '..', '..');
 
     this.server = new Server(
       { name: 'claude-memory', version: '0.1.0' },
@@ -53,6 +62,7 @@ export class MemoryServer {
         memoryAddToolDefinition,
         memoryListToolDefinition,
         memoryDeleteToolDefinition,
+        memoryAnalyzeToolDefinition,
       ],
     }));
 
@@ -100,6 +110,16 @@ export class MemoryServer {
             return {
               content: [{ type: 'text', text: JSON.stringify(result) }],
               isError: !result.deleted,
+            };
+          }
+          case 'memory_analyze': {
+            const result = await handleMemoryAnalyze(
+              args as { save?: boolean },
+              this.projectRoot
+            );
+            return {
+              content: [{ type: 'text', text: JSON.stringify(result) }],
+              isError: !result.success,
             };
           }
           default:
@@ -164,6 +184,8 @@ export class MemoryServer {
         );
       case 'memory_delete':
         return handleMemoryDelete(args as { id: string }, this.repository);
+      case 'memory_analyze':
+        return handleMemoryAnalyze(args as { save?: boolean }, this.projectRoot);
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
