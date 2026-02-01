@@ -106,28 +106,43 @@ export async function analyzeCommand(
 async function parseDocumentation(targetDir: string): Promise<MemoryEntryInput[]> {
   const entries: MemoryEntryInput[] = [];
 
-  // Parse README files
-  const readmeNames = ['README.md', 'readme.md', 'Readme.md', 'README.MD'];
-  for (const name of readmeNames) {
-    const readmePath = join(targetDir, name);
-    if (existsSync(readmePath)) {
+  // Parse important root-level markdown files
+  const rootDocs = [
+    { pattern: 'README.md', category: 'architecture' },
+    { pattern: 'readme.md', category: 'architecture' },
+    { pattern: 'CLAUDE.md', category: 'architecture' },
+    { pattern: 'PROGRESS.md', category: 'architecture' },
+    { pattern: 'ARCHITECTURE.md', category: 'architecture' },
+    { pattern: 'SPEC.md', category: 'architecture' },
+    { pattern: 'DESIGN.md', category: 'architecture' },
+    { pattern: 'API.md', category: 'component' },
+    { pattern: 'CONTRIBUTING.md', category: 'pattern' },
+    { pattern: 'CHANGELOG.md', category: 'architecture' },
+    { pattern: 'FINDINGS.md', category: 'discovery' },
+  ];
+
+  const indexedFiles = new Set<string>();
+
+  for (const { pattern, category } of rootDocs) {
+    const filePath = join(targetDir, pattern);
+    if (existsSync(filePath) && !indexedFiles.has(pattern.toLowerCase())) {
       try {
-        const content = await readFile(readmePath, 'utf-8');
+        const content = await readFile(filePath, 'utf-8');
         if (content.trim().length > 50) {
           entries.push({
-            content: `# Project README\n\n${content}`,
+            content,
             metadata: {
-              category: 'architecture',
+              category,
               source: 'discovery',
-              filePath: name,
+              filePath: pattern,
               keywords: extractKeywordsFromMarkdown(content),
             },
           });
+          indexedFiles.add(pattern.toLowerCase());
         }
       } catch {
         // Skip unreadable files
       }
-      break;
     }
   }
 
