@@ -1,25 +1,25 @@
 import { mkdir, writeFile, readFile, appendFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { execSync } from 'child_process';
+import { scanCommand } from './scan.js';
 
 export interface InitOptions {
   force?: boolean;
-  skipIndex?: boolean;
+  skipScan?: boolean;
 }
 
 export interface InitResult {
   created: string[];
   skipped: string[];
   errors: string[];
-  indexed: boolean;
+  scanned: boolean;
 }
 
 export async function initCommand(
   targetDir: string,
   options: InitOptions = {}
 ): Promise<InitResult> {
-  const result: InitResult = { created: [], skipped: [], errors: [], indexed: false };
+  const result: InitResult = { created: [], skipped: [], errors: [], scanned: false };
   const claudeDir = join(targetDir, '.claude');
 
   // Create directory structure
@@ -155,22 +155,14 @@ try {
   // Update .gitignore to only ignore settings.local.json
   await updateGitignore(targetDir, result);
 
-  // Run initial index if knowledge files exist
-  if (!options.skipIndex) {
+  // Run repo scan and save to memory
+  if (!options.skipScan) {
     try {
-      const knowledgeDir = join(claudeDir, 'knowledge');
-      // Check if there are any .md files
-      const hasContent = existsSync(gotchasPath);
-      if (hasContent) {
-        execSync('npx claude-memory index', {
-          cwd: targetDir,
-          stdio: 'inherit',
-          timeout: 60000,
-        });
-        result.indexed = true;
-      }
+      console.log('');
+      await scanCommand(targetDir, { save: true });
+      result.scanned = true;
     } catch (error) {
-      result.errors.push(`Indexing failed: ${(error as Error).message}`);
+      result.errors.push(`Scan failed: ${(error as Error).message}`);
     }
   }
 

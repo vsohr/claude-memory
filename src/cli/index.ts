@@ -4,6 +4,7 @@ import { indexCommand } from './commands/index-cmd.js';
 import { searchCommand } from './commands/search.js';
 import { serveCommand } from './commands/serve.js';
 import { addCommand } from './commands/add.js';
+import { scanCommand } from './commands/scan.js';
 
 export function createCLI(): Command {
   const program = new Command();
@@ -17,25 +18,15 @@ export function createCLI(): Command {
     .command('init')
     .description('Initialize claude-memory in the current repository')
     .option('-f, --force', 'Overwrite existing files')
-    .option('--skip-index', 'Skip initial indexing')
+    .option('--skip-scan', 'Skip repository scan')
     .action(async (options) => {
       const cwd = process.cwd();
       console.log('Initializing claude-memory...\n');
 
       const result = await initCommand(cwd, {
         force: options.force,
-        skipIndex: options.skipIndex,
+        skipScan: options.skipScan,
       });
-
-      if (result.created.length > 0) {
-        console.log('Created:');
-        result.created.forEach((f) => console.log(`  + ${f}`));
-      }
-
-      if (result.skipped.length > 0) {
-        console.log('\nSkipped (already exist):');
-        result.skipped.forEach((f) => console.log(`  - ${f}`));
-      }
 
       if (result.errors.length > 0) {
         console.log('\nErrors:');
@@ -43,11 +34,15 @@ export function createCLI(): Command {
         process.exit(1);
       }
 
-      if (result.indexed) {
-        console.log('\nIndexed knowledge files.');
-      }
+      console.log('\nReady! Memory initialized with repository structure.');
+    });
 
-      console.log('\nReady! Add knowledge to .claude/knowledge/ and commit.');
+  program
+    .command('scan')
+    .description('Scan repository and save structure to memory')
+    .option('--no-save', 'Show scan results without saving')
+    .action(async (options) => {
+      await scanCommand(process.cwd(), { save: options.save });
     });
 
   program
