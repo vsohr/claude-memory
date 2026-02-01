@@ -67,5 +67,18 @@ Both issues fixed and verified.
 - Incremental indexing with content hashing
 - H3-based markdown chunking with sentence-boundary splits
 
+## Recent Fixes (Session Continuation)
+
+### MCP Server Configuration Fix
+**Problem:** MCP servers weren't being recognized by Claude Code. The `mcpServers` field was incorrectly placed in `.claude/settings.json`, which gives a validation error.
+
+**Solution:**
+- MCP servers must be configured in `.mcp.json` at the project root (not in settings.json)
+- Updated `init.ts` to create `.mcp.json` with the claude-memory MCP server config
+- Removed `mcpServers` from `.claude/settings.json` (now contains only hooks)
+
+**Files affected:**
+- `src/cli/commands/init.ts` - Now creates `.mcp.json` at project root
+
 ## Next Steps
 - [ ] Phase 7: Ship decision (publish to npm)

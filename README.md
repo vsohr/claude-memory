@@ -77,18 +77,21 @@ When running via `npx claude-memory serve`, these tools are available to Claude:
 
 ### Claude Code Integration
 
-After `init`, your `.claude/settings.json` includes the MCP server registration:
+After `init`, a `.mcp.json` file is created at your project root with the MCP server registration:
 
 ```json
 {
   "mcpServers": {
-    "memory": {
+    "claude-memory": {
+      "type": "stdio",
       "command": "npx",
       "args": ["claude-memory", "serve"]
     }
   }
 }
 ```
+
+Additionally, `.claude/settings.json` includes a hook for automatic memory search on prompts.
 
 ## Writing Knowledge
 
@@ -163,16 +166,19 @@ Markdown files → Parser → Chunks → Embeddings → LanceDB
 ## Project Structure
 
 ```
-.claude/
-├── knowledge/          # Your markdown files (Tier 2)
-│   ├── architecture/
-│   ├── components/
-│   └── ...
-├── memory/
-│   ├── vectors/        # LanceDB files (Tier 3)
-│   └── meta.json       # Index metadata
-├── skills/             # Claude automation (optional)
-└── settings.json       # MCP server config
+your-project/
+├── .mcp.json           # MCP server registration (Claude Code)
+└── .claude/
+    ├── knowledge/      # Your markdown files (Tier 2)
+    │   ├── architecture/
+    │   ├── components/
+    │   └── ...
+    ├── memory/
+    │   ├── vectors/    # LanceDB files (Tier 3)
+    │   └── meta.json   # Index metadata
+    ├── hooks/          # Auto-search hook
+    ├── skills/         # Claude automation (optional)
+    └── settings.json   # Hooks configuration
 ```
 
 ## Configuration

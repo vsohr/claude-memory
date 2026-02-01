@@ -66,16 +66,28 @@ Description of a non-obvious behavior or common mistake.
     result.skipped.push(gotchasPath);
   }
 
-  // Create settings.json for MCP registration and hooks
-  const settingsPath = join(claudeDir, 'settings.json');
-  if (!existsSync(settingsPath) || options.force) {
-    const settings = {
+  // Create .mcp.json at project root for MCP server registration
+  const mcpJsonPath = join(targetDir, '.mcp.json');
+  if (!existsSync(mcpJsonPath) || options.force) {
+    const mcpConfig = {
       mcpServers: {
         'claude-memory': {
+          type: 'stdio',
           command: 'npx',
           args: ['claude-memory', 'serve'],
         },
       },
+    };
+    await writeFile(mcpJsonPath, JSON.stringify(mcpConfig, null, 2));
+    result.created.push(mcpJsonPath);
+  } else {
+    result.skipped.push(mcpJsonPath);
+  }
+
+  // Create settings.json for hooks only
+  const settingsPath = join(claudeDir, 'settings.json');
+  if (!existsSync(settingsPath) || options.force) {
+    const settings = {
       hooks: {
         UserPromptSubmit: [
           {
