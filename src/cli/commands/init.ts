@@ -66,7 +66,7 @@ Description of a non-obvious behavior or common mistake.
     result.skipped.push(gotchasPath);
   }
 
-  // Create settings.json for MCP registration
+  // Create settings.json for MCP registration and hooks
   const settingsPath = join(claudeDir, 'settings.json');
   if (!existsSync(settingsPath) || options.force) {
     const settings = {
@@ -75,6 +75,20 @@ Description of a non-obvious behavior or common mistake.
           command: 'npx',
           args: ['claude-memory', 'serve'],
         },
+      },
+      hooks: {
+        UserPromptSubmit: [
+          {
+            matcher: '',
+            hooks: [
+              {
+                type: 'command',
+                command: 'node .claude/hooks/memory-search.js',
+                timeout: 30,
+              },
+            ],
+          },
+        ],
       },
     };
     await writeFile(settingsPath, JSON.stringify(settings, null, 2));
@@ -89,18 +103,24 @@ Description of a non-obvious behavior or common mistake.
     const hookContent = `#!/usr/bin/env node
 /**
  * Auto-search project memory on prompt submission.
- * Extracts keywords and shows relevant context.
+ * Claude Code passes JSON on stdin with { prompt, cwd, session_id, ... }
+ * Output to stdout is added to Claude's context.
  */
 const { execSync } = require('child_process');
 const fs = require('fs');
 
-let prompt = '';
+// Read JSON input from Claude Code
+let input;
 try {
-  prompt = fs.readFileSync(0, 'utf-8').trim();
+  const raw = fs.readFileSync(0, 'utf-8');
+  input = JSON.parse(raw);
 } catch (e) {
   process.exit(0);
 }
 
+const prompt = input.prompt || '';
+
+// Skip short prompts or commands
 if (prompt.length < 10 || prompt.startsWith('/')) {
   process.exit(0);
 }
@@ -122,7 +142,7 @@ const query = words.slice(0, 5).join(' ');
 
 try {
   const result = execSync(\`npx claude-memory search "\${query}" --limit 3 --json\`, {
-    encoding: 'utf-8', timeout: 20000, cwd: process.cwd(),
+    encoding: 'utf-8', timeout: 20000, cwd: input.cwd || process.cwd(),
     stdio: ['pipe', 'pipe', 'pipe']
   });
 
