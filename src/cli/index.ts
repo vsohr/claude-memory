@@ -16,16 +16,16 @@ export function createCLI(): Command {
 
   program
     .command('init')
-    .description('Initialize claude-memory in the current repository')
+    .description('Initialize claude-memory and analyze the repository')
     .option('-f, --force', 'Overwrite existing files')
-    .option('--skip-scan', 'Skip repository scan')
+    .option('--skip-analyze', 'Skip deep analysis')
     .action(async (options) => {
       const cwd = process.cwd();
       console.log('Initializing claude-memory...\n');
 
       const result = await initCommand(cwd, {
         force: options.force,
-        skipScan: options.skipScan,
+        skipAnalyze: options.skipAnalyze,
       });
 
       if (result.errors.length > 0) {
@@ -34,7 +34,7 @@ export function createCLI(): Command {
         process.exit(1);
       }
 
-      console.log('\nReady! Memory initialized with repository structure.');
+      console.log('\nReady! Memory initialized and repository analyzed.');
     });
 
   program

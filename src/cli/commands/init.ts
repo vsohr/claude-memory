@@ -1,25 +1,25 @@
 import { mkdir, writeFile, readFile, appendFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { scanCommand } from './scan.js';
+import { analyzeCommand } from './analyze.js';
 
 export interface InitOptions {
   force?: boolean;
-  skipScan?: boolean;
+  skipAnalyze?: boolean;
 }
 
 export interface InitResult {
   created: string[];
   skipped: string[];
   errors: string[];
-  scanned: boolean;
+  analyzed: boolean;
 }
 
 export async function initCommand(
   targetDir: string,
   options: InitOptions = {}
 ): Promise<InitResult> {
-  const result: InitResult = { created: [], skipped: [], errors: [], scanned: false };
+  const result: InitResult = { created: [], skipped: [], errors: [], analyzed: false };
   const claudeDir = join(targetDir, '.claude');
 
   // Create directory structure
@@ -155,14 +155,14 @@ try {
   // Update .gitignore to only ignore settings.local.json
   await updateGitignore(targetDir, result);
 
-  // Run repo scan and save to memory
-  if (!options.skipScan) {
+  // Run deep analysis and save to memory
+  if (!options.skipAnalyze) {
     try {
       console.log('');
-      await scanCommand(targetDir, { save: true });
-      result.scanned = true;
+      await analyzeCommand(targetDir, { save: true });
+      result.analyzed = true;
     } catch (error) {
-      result.errors.push(`Scan failed: ${(error as Error).message}`);
+      result.errors.push(`Analysis failed: ${(error as Error).message}`);
     }
   }
 
