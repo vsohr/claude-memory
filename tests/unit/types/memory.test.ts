@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { MemoryEntry, MemoryCategory, MemoryMetadata } from '../../../src/types/memory';
+import type { MemoryEntry, MemoryCategory, MemoryMetadata, SearchMode } from '../../../src/types/memory';
 
 describe('Memory Types', () => {
   it('MemoryEntry has required fields', () => {
@@ -18,6 +18,14 @@ describe('Memory Types', () => {
     };
     expect(entry.id).toBe('test-id');
     expect(entry.metadata.category).toBe('general');
+  });
+
+  it('SearchMode accepts valid values', () => {
+    const modes: SearchMode[] = ['vector', 'keyword', 'hybrid'];
+    expect(modes).toHaveLength(3);
+    expect(modes).toContain('vector');
+    expect(modes).toContain('keyword');
+    expect(modes).toContain('hybrid');
   });
 
   it('MemoryCategory includes all valid values', () => {

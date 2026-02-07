@@ -19,6 +19,8 @@ export function createCLI(): Command {
     .description('Initialize claude-memory and analyze the repository')
     .option('-f, --force', 'Overwrite existing files')
     .option('--skip-analyze', 'Skip deep analysis')
+    .option('--skip-index', 'Skip knowledge indexing')
+    .option('--skip-fts', 'Skip FTS index build')
     .action(async (options) => {
       const cwd = process.cwd();
       console.log('Initializing claude-memory...\n');
@@ -26,6 +28,8 @@ export function createCLI(): Command {
       const result = await initCommand(cwd, {
         force: options.force,
         skipAnalyze: options.skipAnalyze,
+        skipIndex: options.skipIndex,
+        skipFts: options.skipFts,
       });
 
       if (result.errors.length > 0) {
@@ -34,7 +38,11 @@ export function createCLI(): Command {
         process.exit(1);
       }
 
-      console.log('\nReady! Memory initialized and repository analyzed.');
+      const steps = ['Memory initialized'];
+      if (result.analyzed) steps.push('repository analyzed');
+      if (result.indexed) steps.push('knowledge indexed');
+      if (result.ftsBuilt) steps.push('FTS built');
+      console.log(`\nReady! ${steps.join(', ')}.`);
     });
 
   program
@@ -62,11 +70,15 @@ export function createCLI(): Command {
     .description('Search the memory database')
     .option('-l, --limit <number>', 'Number of results to return', '5')
     .option('--json', 'Output results as JSON')
+    .option('--mode <mode>', 'Search mode: vector, keyword, hybrid')
+    .option('--format <format>', 'Output format: text, json, csv, md, xml')
     .action(async (query, options) => {
       const limit = parseInt(options.limit, 10);
       await searchCommand(query, process.cwd(), {
         limit: Number.isNaN(limit) ? 5 : limit,
         json: options.json,
+        mode: options.mode,
+        format: options.format,
       });
     });
 

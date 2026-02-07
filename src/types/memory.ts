@@ -1,4 +1,9 @@
 /**
+ * Search mode for memory queries.
+ */
+export type SearchMode = 'vector' | 'keyword' | 'hybrid';
+
+/**
  * Valid categories for memory entries.
  */
 export type MemoryCategory =

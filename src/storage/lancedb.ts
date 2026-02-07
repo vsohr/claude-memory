@@ -2,6 +2,7 @@ import * as lancedb from '@lancedb/lancedb';
 import type { Connection, Table } from '@lancedb/lancedb';
 import { getEmbeddingService } from './embeddings';
 import { generateId } from '../utils/id';
+import { hashContent } from '../indexer/hasher.js';
 import { StorageError, ValidationError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import type {
@@ -150,6 +151,7 @@ interface MemoryRow {
   createdAt: string;
   updatedAt: string;
   vector: number[];
+  contentHash: string;
   [key: string]: unknown;
 }
 
@@ -157,6 +159,8 @@ export class MemoryRepository {
   private dbPath: string;
   private connection: Connection | null = null;
   private table: Table | null = null;
+  /** In-memory content hash cache for dedup (hash -> entry). Populated on query and add. */
+  private hashCache: Map<string, MemoryEntry> = new Map();
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -169,6 +173,7 @@ export class MemoryRepository {
       const tableNames = await this.connection.tableNames();
       if (tableNames.includes(TABLE_NAME)) {
         this.table = await this.connection.openTable(TABLE_NAME);
+        await this.migrateSchema(this.table);
       }
 
       logger.debug(`Connected to LanceDB at ${this.dbPath}`);
@@ -183,10 +188,26 @@ export class MemoryRepository {
   async disconnect(): Promise<void> {
     this.connection = null;
     this.table = null;
+    this.hashCache.clear();
   }
 
   isConnected(): boolean {
     return this.connection !== null;
+  }
+
+  /**
+   * Migrate schema by adding missing columns to an existing table.
+   * Currently checks for the contentHash column added in v0.2.0.
+   */
+  private async migrateSchema(table: Table): Promise<void> {
+    try {
+      // Probe for contentHash by running a small query with the column
+      await table.query().select(['id', 'contentHash']).limit(1).toArray();
+    } catch {
+      // Column missing - add it with empty default
+      logger.info('Migrating schema: adding contentHash column');
+      await table.addColumns([{ name: 'contentHash', valueSql: "''" }]);
+    }
   }
 
   private async ensureTable(): Promise<Table> {
@@ -213,6 +234,7 @@ export class MemoryRepository {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       vector: dummyVector,
+      contentHash: '',
     };
 
     this.table = await this.connection.createTable(TABLE_NAME, [initialRow]);
@@ -262,14 +284,56 @@ export class MemoryRepository {
       createdAt: now,
       updatedAt: now,
       vector,
+      contentHash: hashContent(input.content),
     };
+  }
+
+  /**
+   * Find an existing entry by its content hash.
+   * Returns null if no entry with the given hash exists.
+   *
+   * Uses an in-memory cache for fast lookups during batch operations,
+   * then falls back to a WHERE query on the contentHash column.
+   */
+  async findByContentHash(hash: string): Promise<MemoryEntry | null> {
+    // Check in-memory cache first (fast path for batch indexing)
+    const cached = this.hashCache.get(hash);
+    if (cached) return cached;
+
+    // Query by contentHash column (camelCase needs double quotes in DataFusion SQL)
+    const table = await this.ensureTable();
+    const escaped = escapeQueryValue(hash);
+    const results = await table.query()
+      .where(`"contentHash" = '${escaped}'`)
+      .limit(1)
+      .toArray();
+
+    if (results.length === 0) return null;
+
+    const entry = this.rowToEntry(results[0] as unknown as MemoryRow);
+    this.hashCache.set(hash, entry);
+    return entry;
   }
 
   async add(input: MemoryEntryInput): Promise<MemoryEntry> {
     const table = await this.ensureTable();
+
+    // Dedup: check if identical content already exists
+    const hash = hashContent(input.content);
+    const existing = await this.findByContentHash(hash);
+    if (existing) {
+      logger.debug(`Duplicate content detected (hash=${hash.slice(0, 8)}...), returning existing entry ${existing.id}`);
+      return existing;
+    }
+
     const row = await this.entryToRow(input);
     await table.add([row]);
-    return this.rowToEntry(row);
+    const entry = this.rowToEntry(row);
+
+    // Cache the new entry's hash for future dedup lookups
+    this.hashCache.set(hash, entry);
+
+    return entry;
   }
 
   async get(id: string): Promise<MemoryEntry | null> {
