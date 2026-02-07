@@ -1,58 +1,57 @@
 # Progress Tracking
 
 ## Current Phase
-Phase 6: Verification - COMPLETE
+v0.2.0 Planning - COMPLETE
 
-## Build Status
+## v0.1.0 Status
 - All 23 tasks implemented
 - 54 tests passing across 13 test files
 - Build successful (ESM output)
-- Security review: PASSED (2 low-severity issues fixed)
+- Security review: PASSED
 
-## Completed Tasks
+## v0.2.0 Planning Status
 
-### Milestone 1: Foundation (Tasks 1-5)
-- [x] Task 1: Initialize npm package with TypeScript
-- [x] Task 2: Add build tooling (tsup, vitest)
-- [x] Task 3: Create core type definitions
-- [x] Task 4: Create utility modules (errors, logger, id)
-- [x] Task 5: Create entry point and CLI stub
+### Documents Completed
+- [x] SPEC.md - Feature requirements for hybrid search, dedup, overlap, config, formatters, MCP resources
+- [x] ARCHITECTURE.md - Detailed component designs with interfaces, algorithms, data flows
+- [x] TASKS.md - 15 implementation tasks across 5 milestones (6 S + 9 M, ~11.5h est.)
 
-### Milestone 2: Storage Layer (Tasks 6-8)
-- [x] Task 6: Embedding service with Transformers.js
-- [x] Task 7: LanceDB repository with vector search
-- [x] Task 8: Metadata service for incremental indexing
+### Milestone Overview
+1. **Foundation** (Tasks 1.1-1.3): better-sqlite3 dep, config service, SearchMode type
+2. **FTS Store** (Task 2.1): SQLite FTS5 wrapper with BM25 normalization
+3. **Dedup + Overlap** (Tasks 3.1-3.3): contentHash in LanceDB, chunk overlap in parser, orchestrator wiring
+4. **Hybrid Search** (Task 4.1): HybridSearch orchestrator with RRF fusion
+5. **MCP + CLI** (Tasks 5.1-5.7): formatters, MCP resources/prompts, --mode/--format flags, init enhancement, exports
 
-### Milestone 3: Indexer Pipeline (Tasks 9-12)
-- [x] Task 9: Markdown parser with H3 chunking
-- [x] Task 10: Directive parser (vector-index, keywords)
-- [x] Task 11: Content hasher (SHA-256)
-- [x] Task 12: Indexer orchestrator
+### New Files to Create (4)
+- `src/utils/config.ts`
+- `src/storage/fts.ts`
+- `src/storage/hybrid.ts`
+- `src/cli/formatters.ts`
 
-### Milestone 4: MCP Server (Tasks 13-16)
-- [x] Task 13: MCP server with memory_search tool
-- [x] Task 14: memory_add tool
-- [x] Task 15: memory_list tool
-- [x] Task 16: memory_delete tool
+### New Test Files (10)
+- `tests/unit/utils/config.test.ts`
+- `tests/unit/storage/fts.test.ts`
+- `tests/unit/storage/lancedb-dedup.test.ts`
+- `tests/unit/indexer/parser-overlap.test.ts`
+- `tests/unit/indexer/orchestrator-overlap.test.ts`
+- `tests/unit/storage/hybrid.test.ts`
+- `tests/unit/cli/formatters.test.ts`
+- `tests/unit/server/mcp-resources.test.ts`
+- `tests/unit/cli/search-cmd.test.ts`
+- `tests/unit/cli/init-full.test.ts`
 
-### Milestone 5: CLI Commands (Tasks 17-20, 23)
-- [x] Task 17: CLI framework with init command
-- [x] Task 18: index command
-- [x] Task 19: search command
-- [x] Task 20: serve command
-- [x] Task 23: add command for manual entries
+### Key Design Decisions
+- SearchMode defined in `src/types/memory.ts`, imported elsewhere (avoids circular deps)
+- FTS uses `better-sqlite3` synchronous API (marked external in tsup)
+- RRF fusion with k=60, 3x over-fetch factor for hybrid mode
+- Content dedup via SHA-256 hash at storage level (catches all paths)
+- Chunking overlap as post-processing (backward compat via number param)
+- Config priority: env var > config file > defaults (zod-validated)
+- Category filtering is post-fusion in hybrid mode (preserves rank positions)
+- FTS sync failures are warnings, not errors (vector search still works)
 
-### Milestone 6: Templates (Tasks 21-22)
-- [x] Task 21: Init templates (knowledge, skills, settings)
-- [x] Task 22: Package exports and integration
-
-## Security Review Findings
-1. Path traversal check added to indexer (orchestrator.ts)
-2. NaN fallback added to CLI limit parsing (index.ts)
-
-Both issues fixed and verified.
-
-## Key Decisions Made
+## v0.1.0 Key Decisions (Reference)
 - Transformers.js with Xenova/all-MiniLM-L6-v2 model (384 dimensions)
 - LanceDB for file-based vector storage (no server process)
 - Commander.js for CLI (well-documented, stable)
@@ -60,25 +59,14 @@ Both issues fixed and verified.
 - tsup for bundling (zero config)
 - Singleton pattern for embedding service and LanceDB connection
 - MIN_SIMILARITY_SCORE = -0.5 for search quality filtering
-
-## Architecture Highlights
-- 3-tier knowledge system: rules → markdown → vector DB
-- MCP server for Claude Code integration
-- Incremental indexing with content hashing
-- H3-based markdown chunking with sentence-boundary splits
-
-## Recent Fixes (Session Continuation)
-
-### MCP Server Configuration Fix
-**Problem:** MCP servers weren't being recognized by Claude Code. The `mcpServers` field was incorrectly placed in `.claude/settings.json`, which gives a validation error.
-
-**Solution:**
-- MCP servers must be configured in `.mcp.json` at the project root (not in settings.json)
-- Updated `init.ts` to create `.mcp.json` with the claude-memory MCP server config
-- Removed `mcpServers` from `.claude/settings.json` (now contains only hooks)
-
-**Files affected:**
-- `src/cli/commands/init.ts` - Now creates `.mcp.json` at project root
+- MCP servers configured in `.mcp.json` at project root (not in settings.json)
 
 ## Next Steps
-- [ ] Phase 7: Ship decision (publish to npm)
+- [ ] Implement Milestone 1: Foundation (Tasks 1.1-1.3)
+- [ ] Implement Milestone 2: FTS Store (Task 2.1)
+- [ ] Implement Milestone 3: Dedup + Overlap (Tasks 3.1-3.3)
+- [ ] Implement Milestone 4: Hybrid Search (Task 4.1)
+- [ ] Implement Milestone 5: MCP + CLI (Tasks 5.1-5.7)
+- [ ] Run full test suite (54 existing + new tests)
+- [ ] Security review
+- [ ] Ship decision
