@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import type { MemoryRepository } from '../../storage/lancedb';
+import type { FtsStore } from '../../storage/fts';
+import { logger } from '../../utils/logger';
 
 export const memoryDeleteSchema = z.object({
   id: z.string().min(1),
@@ -15,11 +17,22 @@ export interface MemoryDeleteOutput {
 
 export async function handleMemoryDelete(
   input: { id: string },
-  repository: MemoryRepository
+  repository: MemoryRepository,
+  ftsStore?: FtsStore
 ): Promise<MemoryDeleteOutput> {
   const deleted = await repository.delete(input.id);
 
   if (deleted) {
+    // Sync deletion to FTS index if available
+    if (ftsStore) {
+      try {
+        ftsStore.delete(input.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        logger.warn(`FTS sync failed for deleted entry ${input.id}: ${message}`);
+      }
+    }
+
     return { deleted: true, id: input.id };
   }
 

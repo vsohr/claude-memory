@@ -124,7 +124,7 @@ export class HybridSearch {
   private async searchHybrid(
     query: string,
     limit: number,
-    minScore: number | undefined,
+    _minScore: number | undefined,
     category: MemoryCategory | undefined,
   ): Promise<MemorySearchResult[]> {
     const overFetchLimit = limit * DEFAULT_OVER_FETCH_FACTOR;

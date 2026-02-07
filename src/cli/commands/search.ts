@@ -1,10 +1,18 @@
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { MemoryRepository } from '../../storage/lancedb.js';
+import { HybridSearch } from '../../storage/hybrid.js';
+import { FtsStore } from '../../storage/fts.js';
+import { loadConfig } from '../../utils/config.js';
+import { createFormatter } from '../formatters.js';
+import type { OutputFormat } from '../formatters.js';
+import type { SearchMode } from '../../types/memory.js';
 
 export interface SearchCmdOptions {
   limit?: number;
   json?: boolean;
+  format?: OutputFormat;
+  mode?: SearchMode;
 }
 
 export async function searchCommand(
@@ -19,29 +27,28 @@ export async function searchCommand(
     process.exit(1);
   }
 
+  const config = loadConfig(targetDir);
+
   const repository = new MemoryRepository(vectorsDir);
   await repository.connect();
 
-  const limit = options.limit ?? 5;
-  const results = await repository.search(query, limit);
+  const ftsPath = join(targetDir, '.claude', 'memory', config.ftsDbName);
+  const ftsStore = new FtsStore(ftsPath);
+  ftsStore.open();
 
+  const hybridSearch = new HybridSearch(repository, ftsStore, config);
+
+  const limit = options.limit ?? 5;
+  const results = await hybridSearch.search({
+    query,
+    limit,
+    mode: options.mode ?? config.defaultSearchMode,
+  });
+
+  ftsStore.close();
   await repository.disconnect();
 
-  if (options.json) {
-    console.log(JSON.stringify(results, null, 2));
-    return;
-  }
-
-  if (results.length === 0) {
-    console.log(`No results found for: ${query}`);
-    return;
-  }
-
-  console.log(`Results for: "${query}"\n`);
-  results.forEach((r, i) => {
-    const preview = r.entry.content.slice(0, 100).replace(/\n/g, ' ');
-    console.log(`${i + 1}. [${r.score.toFixed(2)}] ${r.entry.metadata.filePath || 'manual entry'}`);
-    console.log(`   ${preview}...`);
-    console.log();
-  });
+  const format: OutputFormat = options.format ?? (options.json ? 'json' : 'text');
+  const formatter = createFormatter(format);
+  console.log(formatter.format(results, query));
 }

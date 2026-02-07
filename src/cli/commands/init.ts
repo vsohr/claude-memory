@@ -2,10 +2,16 @@ import { mkdir, writeFile, readFile, appendFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { analyzeCommand } from './analyze.js';
+import { indexCommand } from './index-cmd.js';
+import { FtsStore } from '../../storage/fts.js';
+import { loadConfig } from '../../utils/config.js';
+import { MemoryRepository } from '../../storage/lancedb.js';
 
 export interface InitOptions {
   force?: boolean;
   skipAnalyze?: boolean;
+  skipIndex?: boolean;
+  skipFts?: boolean;
 }
 
 export interface InitResult {
@@ -13,16 +19,25 @@ export interface InitResult {
   skipped: string[];
   errors: string[];
   analyzed: boolean;
+  indexed: boolean;
+  ftsBuilt: boolean;
 }
 
 export async function initCommand(
   targetDir: string,
   options: InitOptions = {}
 ): Promise<InitResult> {
-  const result: InitResult = { created: [], skipped: [], errors: [], analyzed: false };
+  const result: InitResult = {
+    created: [],
+    skipped: [],
+    errors: [],
+    analyzed: false,
+    indexed: false,
+    ftsBuilt: false,
+  };
   const claudeDir = join(targetDir, '.claude');
 
-  // Create directory structure
+  // Phase 1: Create directory structure
   const dirs = [
     join(claudeDir, 'knowledge', 'architecture'),
     join(claudeDir, 'knowledge', 'components'),
@@ -187,7 +202,7 @@ try {
   // Update .gitignore to only ignore settings.local.json
   await updateGitignore(targetDir, result);
 
-  // Run deep analysis and save to memory
+  // Phase 2: Run deep analysis and save to memory
   if (!options.skipAnalyze) {
     try {
       console.log('');
@@ -195,6 +210,45 @@ try {
       result.analyzed = true;
     } catch (error) {
       result.errors.push(`Analysis failed: ${(error as Error).message}`);
+    }
+  }
+
+  // Phase 3: Knowledge indexing
+  if (!options.skipIndex) {
+    const knowledgeDir = join(targetDir, '.claude', 'knowledge');
+    if (existsSync(knowledgeDir)) {
+      try {
+        console.log('\nIndexing knowledge files...');
+        await indexCommand(targetDir, { force: options.force });
+        result.indexed = true;
+      } catch (error) {
+        result.errors.push(`Indexing failed: ${(error as Error).message}`);
+      }
+    }
+  }
+
+  // Phase 4: FTS build
+  if (!options.skipFts) {
+    try {
+      const config = loadConfig(targetDir);
+      const ftsPath = join(targetDir, '.claude', 'memory', config.ftsDbName);
+      const ftsStore = new FtsStore(ftsPath);
+      ftsStore.open();
+      ftsStore.clear();
+
+      const vectorsDir = join(targetDir, '.claude', 'memory', 'vectors');
+      const repository = new MemoryRepository(vectorsDir);
+      await repository.connect();
+
+      const entries = await repository.list(undefined, 10000);
+      ftsStore.addBatch(entries);
+      console.log(`  FTS index: ${entries.length} entries`);
+
+      ftsStore.close();
+      await repository.disconnect();
+      result.ftsBuilt = true;
+    } catch (error) {
+      result.errors.push(`FTS build failed: ${(error as Error).message}`);
     }
   }
 

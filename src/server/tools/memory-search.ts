@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { MemoryRepository } from '../../storage/lancedb';
-import type { MemoryCategory } from '../../types/memory';
+import type { HybridSearch } from '../../storage/hybrid';
+import type { MemoryCategory, SearchMode } from '../../types/memory';
 
 export const memorySearchSchema = z.object({
   query: z.string().min(1).max(500),
@@ -16,6 +16,7 @@ export const memorySearchSchema = z.object({
       'general',
     ])
     .optional(),
+  mode: z.enum(['vector', 'keyword', 'hybrid']).default('hybrid'),
 });
 
 export type MemorySearchInput = z.infer<typeof memorySearchSchema>;
@@ -35,14 +36,9 @@ export interface MemorySearchOutput {
   code?: string;
 }
 
-// Minimum similarity score to include in results.
-// Score is calculated as 1 - distance. For dissimilar vectors, this can be negative.
-// We filter out strongly dissimilar results (score < -0.5).
-const MIN_SIMILARITY_SCORE = -0.5;
-
 export async function handleMemorySearch(
-  input: { query: string; limit?: number; category?: string },
-  repository: MemoryRepository
+  input: { query: string; limit?: number; category?: string; mode?: SearchMode },
+  hybridSearch: HybridSearch
 ): Promise<MemorySearchOutput> {
   // Validate input
   if (!input.query || input.query.trim() === '') {
@@ -56,25 +52,18 @@ export async function handleMemorySearch(
   }
 
   const limit = input.limit ?? 5;
-  const searchResults = await repository.search(input.query, limit);
+  const mode = input.mode ?? 'hybrid';
+  const category = input.category as MemoryCategory | undefined;
 
-  // Filter out low-scoring results
-  let filteredResults = searchResults.filter((r) => r.score >= MIN_SIMILARITY_SCORE);
-
-  // Filter by category if specified
-  if (input.category) {
-    filteredResults = filteredResults.filter(
-      (r) => r.entry.metadata.category === input.category
-    );
-  }
-
-  // Increment reference counts
-  for (const result of filteredResults) {
-    await repository.incrementReferenceCount(result.entry.id);
-  }
+  const searchResults = await hybridSearch.search({
+    query: input.query,
+    limit,
+    mode,
+    category,
+  });
 
   return {
-    results: filteredResults.map((r) => ({
+    results: searchResults.map((r) => ({
       id: r.entry.id,
       content: r.entry.content,
       score: r.score,
@@ -83,7 +72,7 @@ export async function handleMemorySearch(
       filePath: r.entry.metadata.filePath,
     })),
     query: input.query,
-    count: filteredResults.length,
+    count: searchResults.length,
   };
 }
 
@@ -119,6 +108,12 @@ export const memorySearchToolDefinition = {
           'discovery',
           'general',
         ],
+      },
+      mode: {
+        type: 'string',
+        description: 'Search mode: vector (semantic), keyword (BM25), or hybrid (both fused with RRF). Default: hybrid',
+        enum: ['vector', 'keyword', 'hybrid'],
+        default: 'hybrid',
       },
     },
     required: ['query'],
