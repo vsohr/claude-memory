@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { HybridSearch } from '../../storage/hybrid';
+import type { MemoryRepository } from '../../storage/lancedb';
 import type { MemoryCategory, SearchMode } from '../../types/memory';
 
 export const memorySearchSchema = z.object({
@@ -38,7 +39,8 @@ export interface MemorySearchOutput {
 
 export async function handleMemorySearch(
   input: { query: string; limit?: number; category?: string; mode?: SearchMode },
-  hybridSearch: HybridSearch
+  hybridSearch: HybridSearch,
+  repository?: MemoryRepository,
 ): Promise<MemorySearchOutput> {
   // Validate input
   if (!input.query || input.query.trim() === '') {
@@ -61,6 +63,17 @@ export async function handleMemorySearch(
     mode,
     category,
   });
+
+  // Increment reference counts for matched entries (non-blocking)
+  if (repository) {
+    for (const result of searchResults) {
+      try {
+        await repository.incrementReferenceCount(result.entry.id);
+      } catch {
+        // Reference count is best-effort, don't fail the search
+      }
+    }
+  }
 
   return {
     results: searchResults.map((r) => ({

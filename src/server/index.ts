@@ -94,7 +94,8 @@ export class MemoryServer {
           case 'memory_search': {
             const result = await handleMemorySearch(
               args as { query: string; limit?: number; category?: string; mode?: 'vector' | 'keyword' | 'hybrid' },
-              this.hybridSearch
+              this.hybridSearch,
+              this.repository,
             );
             return {
               content: [{ type: 'text', text: JSON.stringify(result) }],
@@ -303,7 +304,8 @@ export class MemoryServer {
       case 'memory_search':
         return handleMemorySearch(
           args as { query: string; limit?: number; mode?: 'vector' | 'keyword' | 'hybrid' },
-          this.hybridSearch
+          this.hybridSearch,
+          this.repository,
         );
       case 'memory_add':
         return handleMemoryAdd(

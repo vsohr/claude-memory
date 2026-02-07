@@ -292,29 +292,27 @@ export class MemoryRepository {
    * Find an existing entry by its content hash.
    * Returns null if no entry with the given hash exists.
    *
-   * Uses an in-memory cache first, then falls back to scanning
-   * the table since LanceDB WHERE filters on recently added string
-   * columns may not return results immediately.
+   * Uses an in-memory cache for fast lookups during batch operations,
+   * then falls back to a WHERE query on the contentHash column.
    */
   async findByContentHash(hash: string): Promise<MemoryEntry | null> {
-    // Check in-memory cache first (fast path)
+    // Check in-memory cache first (fast path for batch indexing)
     const cached = this.hashCache.get(hash);
     if (cached) return cached;
 
-    // Fall back to scanning all rows and matching contentHash
+    // Query by contentHash column (camelCase needs double quotes in DataFusion SQL)
     const table = await this.ensureTable();
-    const rows = await table.query().toArray();
+    const escaped = escapeQueryValue(hash);
+    const results = await table.query()
+      .where(`"contentHash" = '${escaped}'`)
+      .limit(1)
+      .toArray();
 
-    for (const row of rows) {
-      const memRow = row as unknown as MemoryRow;
-      if (memRow.contentHash === hash) {
-        const entry = this.rowToEntry(memRow);
-        this.hashCache.set(hash, entry);
-        return entry;
-      }
-    }
+    if (results.length === 0) return null;
 
-    return null;
+    const entry = this.rowToEntry(results[0] as unknown as MemoryRow);
+    this.hashCache.set(hash, entry);
+    return entry;
   }
 
   async add(input: MemoryEntryInput): Promise<MemoryEntry> {

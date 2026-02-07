@@ -42,9 +42,13 @@ interface RawFtsResult {
 function normalizeBm25Scores(results: RawFtsResult[]): FtsSearchResult[] {
   if (results.length === 0) return [];
 
-  const scores = results.map(r => r.rank);
-  const minScore = Math.min(...scores); // most relevant (most negative)
-  const maxScore = Math.max(...scores); // least relevant (least negative)
+  // Use reduce instead of Math.min/max(...spread) to avoid stack overflow on large result sets
+  let minScore = Infinity;
+  let maxScore = -Infinity;
+  for (const r of results) {
+    if (r.rank < minScore) minScore = r.rank;
+    if (r.rank > maxScore) maxScore = r.rank;
+  }
   const range = maxScore - minScore;
 
   // All scores equal: assign 1.0 to all
