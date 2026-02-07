@@ -10,6 +10,11 @@ export interface ContentChunk {
   content: string;
 }
 
+export interface ChunkOptions {
+  maxChunkSize?: number;
+  overlapPercent?: number;
+}
+
 /**
  * Parse markdown file extracting frontmatter and content.
  */
@@ -22,9 +27,88 @@ export function parseMarkdown(markdown: string): ParsedMarkdown {
 }
 
 /**
- * Split content into chunks by H3 headers.
+ * Resolve the second parameter of chunkByHeaders to a normalized ChunkOptions.
+ * - number -> backward compat: { maxChunkSize: number, overlapPercent: 0 }
+ * - ChunkOptions -> use values with defaults
+ * - undefined -> defaults (maxChunkSize=2000, overlapPercent=15)
  */
-export function chunkByHeaders(content: string, maxChunkSize = 2000): ContentChunk[] {
+function resolveChunkOptions(options?: ChunkOptions | number): Required<ChunkOptions> {
+  if (typeof options === 'number') {
+    return { maxChunkSize: options, overlapPercent: 0 };
+  }
+  return {
+    maxChunkSize: options?.maxChunkSize ?? 2000,
+    overlapPercent: options?.overlapPercent ?? 15,
+  };
+}
+
+/**
+ * Extract the tail portion of text for overlap, snapping to sentence boundaries.
+ * Returns up to targetLength characters from the end, but snaps forward to the
+ * start of the nearest complete sentence.
+ */
+export function extractOverlapTail(text: string, targetLength: number): string {
+  if (targetLength <= 0 || text.length === 0) return '';
+  if (targetLength >= text.length) return text;
+
+  // Start from the rough cut point
+  const cutPoint = text.length - targetLength;
+
+  // Look for a sentence boundary (.!?) after the cut point to snap forward
+  const sentenceEndRegex = /[.!?]\s+/g;
+  let bestSnapPoint = cutPoint;
+  let match: RegExpExecArray | null;
+
+  // Find the first sentence boundary at or after the cut point
+  sentenceEndRegex.lastIndex = cutPoint;
+  match = sentenceEndRegex.exec(text);
+
+  if (match !== null && match.index < text.length - 1) {
+    // Snap to after the sentence-ending punctuation + whitespace
+    bestSnapPoint = match.index + match[0].length;
+  }
+
+  // If snap point would consume the entire string, fall back to the raw cut
+  if (bestSnapPoint >= text.length) {
+    bestSnapPoint = cutPoint;
+  }
+
+  return text.slice(bestSnapPoint).trim();
+}
+
+/**
+ * Apply overlap by prepending a tail from the previous chunk to each subsequent chunk.
+ * The first chunk is never modified.
+ */
+export function applyOverlap(chunks: ContentChunk[], overlapPercent: number): ContentChunk[] {
+  if (overlapPercent <= 0 || chunks.length <= 1) return chunks;
+
+  const result: ContentChunk[] = [chunks[0]];
+
+  for (let i = 1; i < chunks.length; i++) {
+    const prevContent = chunks[i - 1].content;
+    const targetLength = Math.floor(prevContent.length * (overlapPercent / 100));
+    const overlap = extractOverlapTail(prevContent, targetLength);
+
+    if (overlap) {
+      result.push({
+        title: chunks[i].title,
+        content: overlap + '\n\n' + chunks[i].content,
+      });
+    } else {
+      result.push(chunks[i]);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Split content into chunks by H3 headers.
+ * Accepts either a number (backward compat, no overlap) or ChunkOptions.
+ */
+export function chunkByHeaders(content: string, options?: ChunkOptions | number): ContentChunk[] {
+  const { maxChunkSize, overlapPercent } = resolveChunkOptions(options);
   const h3Regex = /^###\s+(.+)$/gm;
   const chunks: ContentChunk[] = [];
 
@@ -39,7 +123,7 @@ export function chunkByHeaders(content: string, maxChunkSize = 2000): ContentChu
     // No H3 headers, treat entire content as one chunk
     const trimmed = content.trim();
     if (trimmed) {
-      return splitLongContent({ title: '', content: trimmed }, maxChunkSize);
+      return applyOverlap(splitLongContent({ title: '', content: trimmed }, maxChunkSize), overlapPercent);
     }
     return [];
   }
@@ -62,7 +146,7 @@ export function chunkByHeaders(content: string, maxChunkSize = 2000): ContentChu
     }
   }
 
-  return chunks;
+  return applyOverlap(chunks, overlapPercent);
 }
 
 /**

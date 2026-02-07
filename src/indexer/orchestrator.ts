@@ -2,7 +2,9 @@ import { readdir, readFile } from 'fs/promises';
 import { join, relative } from 'path';
 import { MemoryRepository } from '../storage/lancedb';
 import { MetaService } from '../storage/meta';
+import type { FtsStore } from '../storage/fts';
 import { parseMarkdown, chunkByHeaders } from './parser';
+import type { ChunkOptions } from './parser';
 import { parseDirectives } from './directives';
 import { hashContent } from './hasher';
 import { logger } from '../utils/logger';
@@ -13,6 +15,8 @@ export interface IndexerConfig {
   metaService: MetaService;
   knowledgeDir: string;
   chunkSize?: number;
+  chunkOverlapPercent?: number;
+  ftsStore?: FtsStore;
 }
 
 export interface IndexOptions {
@@ -47,12 +51,16 @@ export class Indexer {
   private metaService: MetaService;
   private knowledgeDir: string;
   private chunkSize: number;
+  private chunkOverlapPercent: number;
+  private ftsStore?: FtsStore;
 
   constructor(config: IndexerConfig) {
     this.repository = config.repository;
     this.metaService = config.metaService;
     this.knowledgeDir = config.knowledgeDir;
     this.chunkSize = config.chunkSize ?? 2000;
+    this.chunkOverlapPercent = config.chunkOverlapPercent ?? 15;
+    this.ftsStore = config.ftsStore;
   }
 
   async index(options: IndexOptions = {}): Promise<IndexResult> {
@@ -118,7 +126,11 @@ export class Indexer {
 
         // Parse and chunk content
         const parsed = parseMarkdown(content);
-        const chunks = chunkByHeaders(parsed.content, this.chunkSize);
+        const chunkOptions: ChunkOptions = {
+          maxChunkSize: this.chunkSize,
+          overlapPercent: this.chunkOverlapPercent,
+        };
+        const chunks = chunkByHeaders(parsed.content, chunkOptions);
 
         if (chunks.length === 0) {
           logger.warn(`Empty file: ${relativePath}`);
@@ -134,7 +146,7 @@ export class Indexer {
           // Add new entries
           for (const chunk of chunks) {
             const category = (parsed.frontmatter.category as MemoryCategory) ?? 'general';
-            const entry: MemoryEntryInput = {
+            const entryInput: MemoryEntryInput = {
               content: chunk.content,
               metadata: {
                 category,
@@ -144,8 +156,18 @@ export class Indexer {
                 keywords: directives.keywords,
               },
             };
-            await this.repository.add(entry);
+            const addedEntry = await this.repository.add(entryInput);
             result.entriesCreated++;
+
+            // Sync to FTS index if available
+            if (this.ftsStore) {
+              try {
+                this.ftsStore.add(addedEntry);
+              } catch (ftsError) {
+                const ftsMessage = ftsError instanceof Error ? ftsError.message : 'Unknown error';
+                logger.warn(`FTS sync failed for entry ${addedEntry.id}: ${ftsMessage}`);
+              }
+            }
           }
 
           // Update hash
