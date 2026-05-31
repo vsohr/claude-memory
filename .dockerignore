@@ -1,0 +1,74 @@
+# VCS
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+ENV/
+*.egg-info/
+.eggs/
+
+# Node
+node_modules/
+**/node_modules/
+dist/
+.next/
+out/
+
+# Caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+*.tsbuildinfo
+
+# Test / build artifacts
+test-results/
+playwright-report/
+coverage/
+htmlcov/
+.playwright-mcp/
+build/
+
+# Data / logs (large, regenerable)
+data/
+export/
+logs/
+*.log
+*.jsonl
+*.sqlite
+*.parquet
+
+# Repo-specific bloat
+backups/
+worktrees/
+mobile-review/
+
+# Agent scratch / SECRETS (never ship)
+.claude/
+.serena/
+dev/
+perf-tests/
+secrets/
+.env
+.env*
+
+# Docs (keep README)
+# Repo-specific: bare "*.md" only matches root-level files in Docker's matcher,
+# so it misses the heavy docs/team/*.md (~290K). Use "**/*.md" to catch nested
+# markdown too. Negations below win because last match decides (BuildKit).
+*.md
+**/*.md
+!README.md
+
+# Repo-specific: templates/**/*.md is a shipped package asset
+# (package.json "files" includes "templates"; init copies these at runtime).
+!templates/**/*.md
+
+# Repo-specific: LanceDB vector store (regenerable, large)
+*.lance/
+**/*.lance/
+.claude/memory/
