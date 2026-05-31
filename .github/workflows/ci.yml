@@ -1,0 +1,25 @@
+# lint/typecheck/e2e are informational (continue-on-error) until each baseline is clean; flip to blocking per-gate once green. Unit tests are blocking.
+name: CI
+on:
+  push:
+    branches: [main, master]
+  pull_request: {}
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.gate != 'test' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run ${{ matrix.gate }}
