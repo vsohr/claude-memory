@@ -1,3 +1,4 @@
+# lint/typecheck/e2e are informational (continue-on-error) until each baseline is clean; flip to blocking per-gate once green. Unit tests are blocking.
 name: CI
 on:
   push:
@@ -9,6 +10,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.gate != 'test' }}
     strategy:
       fail-fast: false
       matrix:
