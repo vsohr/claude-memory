@@ -1,4 +1,7 @@
-# lint/typecheck/e2e are informational (continue-on-error) until each baseline is clean; flip to blocking per-gate once green. Unit tests are blocking.
+# lint, typecheck, and test are all blocking gates and genuinely pass.
+# The test gate downloads Xenova/all-MiniLM-L6-v2 once (serially, cached) before
+# running vitest, which avoids the concurrent partial-download race that used to
+# flake the suite with "Protobuf parsing failed" (EMBEDDING_ERROR).
 name: CI
 on:
   push:
@@ -10,8 +13,6 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    # All gates informational: the test suite downloads the Xenova/all-MiniLM-L6-v2 model, unavailable on a vanilla runner. Flip test to blocking once the model is provisioned in CI.
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -23,4 +24,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Cache the embedding model across runs (keyed on the predownload script).
+      - name: Cache embedding model
+        if: matrix.gate == 'test'
+        uses: actions/cache@v4
+        with:
+          path: node_modules/@huggingface/transformers/.cache
+          key: hf-model-${{ runner.os }}-${{ hashFiles('scripts/predownload-model.mjs') }}
+      # Populate + validate the model cache once, serially, before parallel tests.
+      - name: Pre-download embedding model
+        if: matrix.gate == 'test'
+        run: npm run predownload-model
       - run: npm run ${{ matrix.gate }}
