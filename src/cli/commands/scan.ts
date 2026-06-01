@@ -1,8 +1,7 @@
-import { readdir, readFile, stat } from 'fs/promises';
-import { join, extname, basename, relative } from 'path';
+import { readdir, readFile } from 'fs/promises';
+import { join, extname } from 'path';
 import { existsSync } from 'fs';
 import { MemoryRepository } from '../../storage/lancedb.js';
-import { getEmbeddingService } from '../../storage/embeddings.js';
 import type { MemoryEntryInput } from '../../types/memory.js';
 
 export interface ScanOptions {
@@ -112,8 +111,7 @@ export async function scanCommand(
     if (existsSync(vectorsDir)) {
       console.log('\nSaving discoveries to memory...');
 
-      const embeddingService = await getEmbeddingService();
-      const repository = new MemoryRepository(vectorsDir, embeddingService);
+      const repository = new MemoryRepository(vectorsDir);
       await repository.connect();
 
       // Create a summary entry

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HybridSearch } from '../../../src/storage/hybrid';
-import type { HybridSearchOptions } from '../../../src/storage/hybrid';
 import type { MemoryRepository } from '../../../src/storage/lancedb';
 import type { FtsStore, FtsSearchResult } from '../../../src/storage/fts';
 import type { MemoryConfigResolved } from '../../../src/utils/config';
