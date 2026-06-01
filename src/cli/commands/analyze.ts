@@ -2,8 +2,7 @@ import { readdir, readFile } from 'fs/promises';
 import { join, extname, relative } from 'path';
 import { existsSync } from 'fs';
 import { MemoryRepository } from '../../storage/lancedb.js';
-import { getEmbeddingService } from '../../storage/embeddings.js';
-import type { MemoryEntryInput } from '../../types/memory.js';
+import type { MemoryCategory, MemoryEntryInput } from '../../types/memory.js';
 
 export interface AnalyzeOptions {
   save?: boolean;
@@ -84,8 +83,7 @@ export async function analyzeCommand(
     if (existsSync(vectorsDir)) {
       console.log('\nSaving to memory...');
 
-      const embeddingService = await getEmbeddingService();
-      const repository = new MemoryRepository(vectorsDir, embeddingService);
+      const repository = new MemoryRepository(vectorsDir);
       await repository.connect();
 
       for (const entry of entries) {
@@ -107,7 +105,7 @@ async function parseDocumentation(targetDir: string): Promise<MemoryEntryInput[]
   const entries: MemoryEntryInput[] = [];
 
   // Parse important root-level markdown files
-  const rootDocs = [
+  const rootDocs: { pattern: string; category: MemoryCategory }[] = [
     { pattern: 'README.md', category: 'architecture' },
     { pattern: 'readme.md', category: 'architecture' },
     { pattern: 'CLAUDE.md', category: 'architecture' },

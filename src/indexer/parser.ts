@@ -57,11 +57,10 @@ export function extractOverlapTail(text: string, targetLength: number): string {
   // Look for a sentence boundary (.!?) after the cut point to snap forward
   const sentenceEndRegex = /[.!?]\s+/g;
   let bestSnapPoint = cutPoint;
-  let match: RegExpExecArray | null;
 
   // Find the first sentence boundary at or after the cut point
   sentenceEndRegex.lastIndex = cutPoint;
-  match = sentenceEndRegex.exec(text);
+  const match = sentenceEndRegex.exec(text);
 
   if (match !== null && match.index < text.length - 1) {
     // Snap to after the sentence-ending punctuation + whitespace

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { MemoryEntry, MemoryCategory, MemoryMetadata, SearchMode } from '../../../src/types/memory';
+import type { MemoryEntry, MemoryCategory, SearchMode } from '../../../src/types/memory';
 
 describe('Memory Types', () => {
   it('MemoryEntry has required fields', () => {

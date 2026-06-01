@@ -3,7 +3,6 @@ import {
   MemoryError,
   ValidationError,
   StorageError,
-  ConfigError,
 } from '../../../src/utils/errors';
 
 describe('MemoryError', () => {

@@ -9,7 +9,7 @@ import {
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { readFile } from 'fs/promises';
-import { join, resolve, normalize } from 'path';
+import { join, resolve } from 'path';
 import { MemoryRepository } from '../storage/lancedb';
 import { FtsStore } from '../storage/fts';
 import { HybridSearch } from '../storage/hybrid';
@@ -295,11 +295,12 @@ export class MemoryServer {
     await this.server.close();
   }
 
-  // For testing
+  // For testing. Returns `object` (not Record<string, unknown>) because the
+  // per-tool output types are concrete interfaces without an index signature.
   async callTool(
     name: string,
     args: Record<string, unknown>
-  ): Promise<Record<string, unknown>> {
+  ): Promise<object> {
     switch (name) {
       case 'memory_search':
         return handleMemorySearch(
